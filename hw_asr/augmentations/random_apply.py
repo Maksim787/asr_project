@@ -12,6 +12,6 @@ class RandomApply:
 
     def __call__(self, data: Tensor) -> Tensor:
         if random.random() < self.p:
-            return self.augmentation(data)
+            return self.augmentation.forward(data)
         else:
-            return data
+            return data, []

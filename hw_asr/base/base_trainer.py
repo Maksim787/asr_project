@@ -13,6 +13,7 @@ class BaseTrainer:
     """
 
     def __init__(self, model: BaseModel, criterion, metrics, optimizer, config, device):
+        print(f'Use device: {device}')
         self.device = device
         self.config = config
         self.logger = config.get_logger("trainer", config["trainer"]["verbosity"])
@@ -21,6 +22,7 @@ class BaseTrainer:
         self.criterion = criterion
         self.metrics = metrics
         self.optimizer = optimizer
+        self.lr_scheduler = None
 
         # for interrupt saving
         self._last_epoch = 0
@@ -142,6 +144,7 @@ class BaseTrainer:
             "epoch": epoch,
             "state_dict": self.model.state_dict(),
             "optimizer": self.optimizer.state_dict(),
+            "lr_scheduler": self.lr_scheduler.state_dict() if self.lr_scheduler is not None else None,
             "monitor_best": self.mnt_best,
             "config": self.config,
         }
@@ -153,6 +156,8 @@ class BaseTrainer:
             best_path = str(self.checkpoint_dir / "model_best.pth")
             torch.save(state, best_path)
             self.logger.info("Saving current best: model_best.pth ...")
+
+    # TODO: from_pretrained
 
     def _resume_checkpoint(self, resume_path):
         """
@@ -185,6 +190,8 @@ class BaseTrainer:
             )
         else:
             self.optimizer.load_state_dict(checkpoint["optimizer"])
+            if self.lr_scheduler is not None:
+                self.lr_scheduler.load_state_dict(checkpoint["lr_scheduler"])
 
         self.logger.info(
             "Checkpoint loaded. Resume training from epoch {}".format(self.start_epoch)

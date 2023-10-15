@@ -171,6 +171,12 @@ class ConfigParser:
         with config_path.open() as f:
             return cls(json.load(f))
 
+    @classmethod
+    def get_debug_configs(cls):
+        config_path = ROOT_PATH / "hw_asr" / "configs" / "debug_test.json"
+        with config_path.open() as f:
+            return cls(json.load(f))
+
 
 # helper functions to update config dict with custom cli options
 def _update_config(config, modification):

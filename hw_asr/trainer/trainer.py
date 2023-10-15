@@ -4,6 +4,7 @@ from random import shuffle
 
 import PIL
 import pandas as pd
+import torchaudio
 import torch
 import torch.nn.functional as F
 from torch.nn.utils import clip_grad_norm_
@@ -50,7 +51,7 @@ class Trainer(BaseTrainer):
             self.len_epoch = len_epoch
         self.evaluation_dataloaders = {k: v for k, v in dataloaders.items() if k != "train"}
         self.lr_scheduler = lr_scheduler
-        self.log_step = 50
+        self.log_step = config["trainer"].get("log_step", 50)
 
         self.train_metrics = MetricTracker(
             "loss", "grad norm", *[m.name for m in self.metrics], writer=self.writer
@@ -115,7 +116,8 @@ class Trainer(BaseTrainer):
                     "learning rate", self.lr_scheduler.get_last_lr()[0]
                 )
                 self._log_predictions(**batch)
-                self._log_spectrogram(batch["spectrogram"])
+                self._log_audio(batch)
+                self._log_spectrogram(batch)
                 self._log_scalars(self.train_metrics)
                 # we don't want to reset train metrics at the start of every epoch
                 # because we are interested in recent train metrics
@@ -142,13 +144,12 @@ class Trainer(BaseTrainer):
             batch["logits"] = outputs
 
         batch["log_probs"] = F.log_softmax(batch["logits"], dim=-1)
-        batch["log_probs_length"] = self.model.transform_input_lengths(
-            batch["spectrogram_length"]
-        )
+        batch["log_probs_length"] = self.model.transform_input_lengths(batch["spectrogram_length"])
         batch["loss"] = self.criterion(**batch)
         if is_train:
             batch["loss"].backward()
             self._clip_grad_norm()
+            # TODO: gradient accumulation
             self.optimizer.step()
             if self.lr_scheduler is not None:
                 self.lr_scheduler.step()
@@ -181,7 +182,8 @@ class Trainer(BaseTrainer):
             self.writer.set_step(epoch * self.len_epoch, part)
             self._log_scalars(self.evaluation_metrics)
             self._log_predictions(**batch)
-            self._log_spectrogram(batch["spectrogram"])
+            self._log_audio(batch)
+            self._log_spectrogram(batch)
 
         # add histogram of model parameters to the tensorboard
         for name, p in self.model.named_parameters():
@@ -197,6 +199,24 @@ class Trainer(BaseTrainer):
             current = batch_idx
             total = self.len_epoch
         return base.format(current, total, 100.0 * current / total)
+
+    def _get_random_log_ind(self, batch):
+        return random.choice(range(len(batch["audio_path"])))
+
+    def _log_audio(self, batch):
+        ind = self._get_random_log_ind(batch)
+        audio = batch["audio"][ind].cpu()
+        wave_augs = batch["wave_augs"][ind]
+        audio_path = Path(batch["audio_path"][ind])
+        t_info = torchaudio.info(audio_path)
+        self.writer.add_audio("audio" + (f"_({(' '.join(wave_augs))})" if wave_augs else ""), audio, sample_rate=t_info.sample_rate)
+
+    def _log_spectrogram(self, batch):
+        ind = self._get_random_log_ind(batch)
+        spectrogram = batch["spectrogram"][ind].cpu()
+        spectrogram_augs = batch["spec_augs"][ind]
+        image = PIL.Image.open(plot_spectrogram_to_buf(spectrogram))
+        self.writer.add_image("spectrogram" + (f"_({(' '.join(spectrogram_augs))})" if spectrogram_augs else ""), ToTensor()(image))
 
     def _log_predictions(
             self,
@@ -228,17 +248,12 @@ class Trainer(BaseTrainer):
 
             rows[Path(audio_path).name] = {
                 "target": target,
-                "raw prediction": raw_pred,
                 "predictions": pred,
+                "raw prediction": raw_pred,
                 "wer": wer,
                 "cer": cer,
             }
         self.writer.add_table("predictions", pd.DataFrame.from_dict(rows, orient="index"))
-
-    def _log_spectrogram(self, spectrogram_batch):
-        spectrogram = random.choice(spectrogram_batch.cpu())
-        image = PIL.Image.open(plot_spectrogram_to_buf(spectrogram))
-        self.writer.add_image("spectrogram", ToTensor()(image))
 
     @torch.no_grad()
     def get_grad_norm(self, norm_type=2):

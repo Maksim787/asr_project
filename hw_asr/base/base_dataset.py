@@ -43,10 +43,12 @@ class BaseDataset(Dataset):
         data_dict = self._index[ind]
         audio_path = data_dict["path"]
         audio_wave = self.load_audio(audio_path)
-        audio_wave, audio_spec = self.process_wave(audio_wave)
+        audio_wave, audio_spec, wave_augs_names, spec_augs_names = self.process_wave(audio_wave)
         return {
             "audio": audio_wave,
+            "wave_augs": wave_augs_names,
             "spectrogram": audio_spec,
+            "spec_augs": spec_augs_names,
             "duration": audio_wave.size(1) / self.config_parser["preprocessing"]["sr"],
             "text": data_dict["text"],
             "text_encoded": self.text_encoder.encode(data_dict["text"]),
@@ -70,18 +72,25 @@ class BaseDataset(Dataset):
 
     def process_wave(self, audio_tensor_wave: Tensor):
         with torch.no_grad():
+            # Do Wave augmentations before constructing spectrogram
             if self.wave_augs is not None:
-                audio_tensor_wave = self.wave_augs(audio_tensor_wave)
+                audio_tensor_wave, wave_augs_names = self.wave_augs(audio_tensor_wave)
+            else:
+                wave_augs_names = []
+            # Construct spectrogram
             wave2spec = self.config_parser.init_obj(
                 self.config_parser["preprocessing"]["spectrogram"],
                 torchaudio.transforms,
             )
             audio_tensor_spec = wave2spec(audio_tensor_wave)
+            # Do spectrogram augmentations
             if self.spec_augs is not None:
-                audio_tensor_spec = self.spec_augs(audio_tensor_spec)
+                audio_tensor_spec, spec_augs_names = self.spec_augs(audio_tensor_spec)
+            else:
+                spec_augs_names = []
             if self.log_spec:
                 audio_tensor_spec = torch.log(audio_tensor_spec + 1e-5)
-            return audio_tensor_wave, audio_tensor_spec
+            return audio_tensor_wave, audio_tensor_spec, wave_augs_names, spec_augs_names
 
     @staticmethod
     def _filter_records_from_dataset(
