@@ -4,6 +4,7 @@ import warnings
 
 import numpy as np
 import torch
+import random
 
 import hw_asr.loss as module_loss
 import hw_asr.metric as module_metric
@@ -20,7 +21,9 @@ SEED = 123
 torch.manual_seed(SEED)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
+torch.cuda.manual_seed_all(SEED)
 np.random.seed(SEED)
+random.seed(SEED)
 
 
 def main(config):

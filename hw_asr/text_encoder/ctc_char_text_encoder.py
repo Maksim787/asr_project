@@ -67,6 +67,7 @@ class CTCCharTextEncoder(CharTextEncoder):
         """
         assert len(log_probs.shape) == 2
         char_length, voc_size = log_probs.shape
+        assert char_length == log_probs_length
         assert voc_size == len(self.ind2char)
 
         # (prefix, last_token) -> log(prob)
