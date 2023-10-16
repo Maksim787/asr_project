@@ -52,9 +52,14 @@ class Trainer(BaseTrainer):
         self.evaluation_dataloaders = {k: v for k, v in dataloaders.items() if k != "train"}
         self.lr_scheduler = lr_scheduler
         self.log_step = config["trainer"].get("log_step", 50)
+        self.n_batches_accumulation = config["trainer"].get("n_batches_accumulation", 1)
+        self.beam_size = config["trainer"].get("beam_size", 100)
+
+        if "steps_per_epoch" in config["lr_scheduler"]["args"] and self.len_epoch is not None:
+            assert self.n_batches_accumulation * config["lr_scheduler"]["args"]["steps_per_epoch"] == self.len_epoch
 
         self.train_metrics = MetricTracker(
-            "loss", "grad norm", *[m.name for m in self.metrics], writer=self.writer
+            "loss", "grad norm", *[m.name for m in self.metrics if not m.only_val], writer=self.writer
         )
         self.evaluation_metrics = MetricTracker(
             "loss", *[m.name for m in self.metrics], writer=self.writer
@@ -83,8 +88,8 @@ class Trainer(BaseTrainer):
         :return: A log that contains average loss and metric in this epoch.
         """
         self.model.train()
-        self.train_metrics.reset()
         self.writer.add_scalar("epoch", epoch)
+        batch_ind_in_batch_accumulation = 0
         for batch_idx, batch in enumerate(
                 tqdm(self.train_dataloader, desc="train", total=self.len_epoch)
         ):
@@ -93,7 +98,10 @@ class Trainer(BaseTrainer):
                     batch,
                     is_train=True,
                     metrics=self.train_metrics,
+                    batch_ind_in_batch_accumulation=batch_ind_in_batch_accumulation
                 )
+                # increment the batch index count
+                batch_ind_in_batch_accumulation += 1
             except RuntimeError as e:
                 if "out of memory" in str(e) and self.skip_oom:
                     self.logger.warning("OOM on batch. Skipping batch.")
@@ -104,12 +112,14 @@ class Trainer(BaseTrainer):
                     continue
                 else:
                     raise e
-            self.train_metrics.update("grad norm", self.get_grad_norm())
+            if batch_ind_in_batch_accumulation == self.n_batches_accumulation:
+                self.train_metrics.update("grad norm", self.get_grad_norm())
+                batch_ind_in_batch_accumulation = 0
             if batch_idx % self.log_step == 0:
                 self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
                 self.logger.debug(
                     "Train Epoch: {} {} Loss: {:.6f}".format(
-                        epoch, self._progress(batch_idx), batch["loss"].item()
+                        epoch, self._progress(batch_idx + 1), batch["loss"].item()
                     )
                 )
                 self.writer.add_scalar(
@@ -133,9 +143,9 @@ class Trainer(BaseTrainer):
 
         return log
 
-    def process_batch(self, batch, is_train: bool, metrics: MetricTracker):
+    def process_batch(self, batch, is_train: bool, metrics: MetricTracker, batch_ind_in_batch_accumulation: int | None = None):
         batch = self.move_batch_to_device(batch, self.device)
-        if is_train:
+        if is_train and batch_ind_in_batch_accumulation == 0:
             self.optimizer.zero_grad()
         outputs = self.model(**batch)
         if type(outputs) is dict:
@@ -147,16 +157,20 @@ class Trainer(BaseTrainer):
         batch["log_probs_length"] = self.model.transform_input_lengths(batch["spectrogram_length"])
         batch["loss"] = self.criterion(**batch)
         if is_train:
-            batch["loss"].backward()
-            self._clip_grad_norm()
-            # TODO: gradient accumulation
-            self.optimizer.step()
-            if self.lr_scheduler is not None:
-                self.lr_scheduler.step()
+            # gradient accumulation: divide loss by number of batches
+            (batch["loss"] / self.n_batches_accumulation).backward()
+            if batch_ind_in_batch_accumulation + 1 == self.n_batches_accumulation:
+                self._clip_grad_norm()
+                self.optimizer.step()
+                if self.lr_scheduler is not None:
+                    self.lr_scheduler.step()
 
         metrics.update("loss", batch["loss"].item())
         for met in self.metrics:
-            metrics.update(met.name, met(**batch))
+            if not is_train or not met.only_val:
+                metrics.update(met.name, met(**batch))
+        if not torch.isfinite(batch["loss"]).item():
+            raise RuntimeError(f'Non-finite loss: {batch["loss"].item()}')
         return batch
 
     def _evaluation_epoch(self, epoch, part, dataloader):
@@ -225,10 +239,11 @@ class Trainer(BaseTrainer):
             log_probs_length,
             audio_path,
             examples_to_log=10,
+            beam_search_examples_to_log=10,
             *args,
             **kwargs,
     ):
-        # TODO: implement logging of beam search results
+        # TODO: implement logging of language model results
         if self.writer is None:
             return
         argmax_inds = log_probs.cpu().argmax(-1).numpy()
@@ -237,23 +252,46 @@ class Trainer(BaseTrainer):
             for inds, ind_len in zip(argmax_inds, log_probs_length.numpy())
         ]
         argmax_texts_raw = [self.text_encoder.decode(inds) for inds in argmax_inds]
-        argmax_texts = [self.text_encoder.ctc_decode(inds) for inds in argmax_inds]
+        argmax_texts = [self.text_encoder.ctc_decode_enhanced(inds) for inds in argmax_inds]
         tuples = list(zip(argmax_texts, text, argmax_texts_raw, audio_path))
-        shuffle(tuples)
+
+        # Shuffle results
+        ind = list(range(len(tuples)))
+        shuffle(ind)
+        tuples = [tuples[i] for i in ind]
         rows = {}
         for pred, target, raw_pred, audio_path in tuples[:examples_to_log]:
             target = BaseTextEncoder.normalize_text(target)
             wer = calc_wer(target, pred) * 100
             cer = calc_cer(target, pred) * 100
-
             rows[Path(audio_path).name] = {
                 "target": target,
-                "predictions": pred,
+                "prediction": pred,
                 "raw prediction": raw_pred,
                 "wer": wer,
                 "cer": cer,
             }
         self.writer.add_table("predictions", pd.DataFrame.from_dict(rows, orient="index"))
+
+        # Beam search for the first sentence
+        beam_search_hypotheses = self.text_encoder.ctc_beam_search(log_probs[ind[0]].detach().cpu(), log_probs_length[ind[0]].item(), self.beam_size)[:beam_search_examples_to_log]
+        rows = {}
+        pred, target, raw_pred, audio_path = tuples[0]
+        target = BaseTextEncoder.normalize_text(target)
+        for i, hypothesis in enumerate(beam_search_hypotheses):
+            wer = calc_wer(target, hypothesis.text) * 100
+            cer = calc_cer(target, hypothesis.text) * 100
+            rows[i] = {
+                "rank": i,
+                "beam_search_pred": hypothesis.text,
+                "probability": hypothesis.prob,
+                "wer": wer,
+                "cer": cer,
+                "target": target,
+                "prediction": pred,
+                "raw_prediction": raw_pred,
+            }
+        self.writer.add_table(f"beam_search ({self.beam_size})", pd.DataFrame.from_dict(rows, orient="index"))
 
     @torch.no_grad()
     def get_grad_norm(self, norm_type=2):

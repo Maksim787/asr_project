@@ -91,6 +91,13 @@ if __name__ == "__main__":
         help="path to latest checkpoint (default: None)",
     )
     args.add_argument(
+        "-p",
+        "--from_pretrained",
+        default='false',
+        type=str,
+        help="initialize model from pretrained (default: False)"
+    )
+    args.add_argument(
         "-d",
         "--device",
         default=None,

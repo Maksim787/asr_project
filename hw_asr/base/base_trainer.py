@@ -55,7 +55,12 @@ class BaseTrainer:
         )
 
         if config.resume is not None:
-            self._resume_checkpoint(config.resume)
+            if config.from_pretrained:
+                print('Load pretrained model')
+                self._from_pretrained(config.resume)
+            else:
+                print('Resume from checkpoint')
+                self._resume_checkpoint(config.resume)
 
     @abstractmethod
     def _train_epoch(self, epoch):
@@ -157,7 +162,28 @@ class BaseTrainer:
             torch.save(state, best_path)
             self.logger.info("Saving current best: model_best.pth ...")
 
-    # TODO: from_pretrained
+    def _from_pretrained(self, pretrained_path):
+        """
+        Start from saved checkpoints
+
+        :param pretrained_path: Checkpoint path to be resumed
+        """
+        pretrained_path = str(pretrained_path)
+        self.logger.info("Loading checkpoint: {} ...".format(pretrained_path))
+        checkpoint = torch.load(pretrained_path, self.device)
+        self.mnt_best = checkpoint["monitor_best"]
+
+        # load architecture params from checkpoint.
+        if checkpoint["config"]["arch"] != self.config["arch"]:
+            self.logger.warning(
+                "Warning: Architecture configuration given in config file is different from that "
+                "of checkpoint. This may yield an exception while state_dict is being loaded."
+            )
+        self.model.load_state_dict(checkpoint["state_dict"])
+
+        self.logger.info(
+            "Checkpoint loaded. Resume training from epoch {}".format(self.start_epoch)
+        )
 
     def _resume_checkpoint(self, resume_path):
         """
