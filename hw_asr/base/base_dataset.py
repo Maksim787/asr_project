@@ -75,6 +75,8 @@ class BaseDataset(Dataset):
             # Do Wave augmentations before constructing spectrogram
             if self.wave_augs is not None:
                 audio_tensor_wave, wave_augs_names = self.wave_augs(audio_tensor_wave)
+                # Clip the audio to [-1, 1]
+                audio_tensor_wave = torch.clamp(audio_tensor_wave, -1, 1)
             else:
                 wave_augs_names = []
             # Construct spectrogram

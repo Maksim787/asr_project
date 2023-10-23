@@ -10,6 +10,8 @@ def from_configs(configs: ConfigParser):
     wave_augs = []
     if "augmentations" in configs.config and "wave" in configs.config["augmentations"]:
         for aug_dict in configs.config["augmentations"]["wave"]:
+            aug_dict = aug_dict.copy()
+            aug_dict["args"]["sample_rate"] = configs.config["preprocessing"]["sr"]
             wave_augs.append(
                 configs.init_obj(aug_dict, hw_asr.augmentations.wave_augmentations)
             )

@@ -1,0 +1,164 @@
+{
+    "name": "deep_speech_2",
+    "n_gpu": 1,
+    "preprocessing": {
+        "sr": 16000,
+        "spectrogram": {
+            "type": "MelSpectrogram",
+            "args": {}
+        },
+        "log_spec": true
+    },
+    "augmentations": {
+        "wave": [
+            {
+                "type": "Gain",
+                "args": {
+                    "p": 0.7
+                }
+            },
+            {
+                "type": "AddColoredNoise",
+                "args": {
+                    "p": 0.5
+                }
+            },
+            {
+                "type": "PitchShift",
+                "args": {
+                    "p": 0.5
+                }
+            }
+        ],
+        "spectrogram": [
+            {
+                "type": "TimeStretch",
+                "args": {
+                    "p": 0.3,
+                    "min_coef": 0.8,
+                    "max_coef": 1.2
+                }
+            }
+        ]
+    },
+    "arch": {
+        "type": "DeepSpeech2",
+        "args": {
+            "n_feats": 128
+        }
+    },
+    "data": {
+        "train": {
+            "batch_size": 32,
+            "num_workers": 8,
+            "datasets": [
+                {
+                    "type": "LibrispeechDataset",
+                    "args": {
+                        "part": "train-other-500",
+                        "max_audio_length": 17.0,
+                        "max_text_length": 270
+                    },
+                    "module": "hw_asr.datasets"
+                }
+            ]
+        },
+        "val-clean": {
+            "batch_size": 16,
+            "num_workers": 8,
+            "datasets": [
+                {
+                    "type": "LibrispeechDataset",
+                    "args": {
+                        "part": "dev-clean",
+                        "limit": 500
+                    },
+                    "module": "hw_asr.datasets"
+                }
+            ]
+        },
+        "val-other": {
+            "batch_size": 16,
+            "num_workers": 8,
+            "datasets": [
+                {
+                    "type": "LibrispeechDataset",
+                    "args": {
+                        "part": "dev-other",
+                        "limit": 1500
+                    },
+                    "module": "hw_asr.datasets"
+                }
+            ]
+        }
+    },
+    "optimizer": {
+        "type": "Adam",
+        "args": {
+            "lr": 3e-4
+        }
+    },
+    "loss": {
+        "type": "CTCLoss",
+        "args": {}
+    },
+    "metrics": [
+        {
+            "type": "WERMetric",
+            "args": {
+                "name": "WER (argmax)",
+                "inference_type": "ctc_decode_enhanced"
+            }
+        },
+        {
+            "type": "CERMetric",
+            "args": {
+                "name": "CER (argmax)",
+                "inference_type": "ctc_decode_enhanced"
+            }
+        },
+        {
+            "type": "WERMetric",
+            "args": {
+                "name": "WER (beam_search)",
+                "only_val": true,
+                "inference_type": "ctc_beam_search",
+                "beam_size": 5
+            }
+        },
+        {
+            "type": "CERMetric",
+            "args": {
+                "name": "CER (beam_search)",
+                "only_val": true,
+                "inference_type": "ctc_beam_search",
+                "beam_size": 5
+            }
+        }
+    ],
+    "lr_scheduler": {
+        "type": "OneCycleLR",
+        "args": {
+            "steps_per_epoch": 512,
+            "epochs": 65,
+            "anneal_strategy": "cos",
+            "max_lr": 3e-4,
+            "pct_start": 0.2
+        }
+    },
+    "trainer": {
+        "epochs": 64,
+        "save_dir": "saved/",
+        "save_period": 5,
+        "verbosity": 2,
+        "monitor": "min val-other_loss",
+        "early_stop": 10,
+        "visualize": "wandb",
+        "wandb_project": "asr_project",
+        "wandb_run": "deep_speech_2_fine_tune (server)",
+        "len_epoch": 512,
+        "log_step": 128,
+        "grad_norm_clip": 10,
+        "beam_size": 5
+    }
+}

@@ -42,6 +42,7 @@ class Trainer(BaseTrainer):
         self.text_encoder = text_encoder
         self.config = config
         self.train_dataloader = dataloaders["train"]
+        self.dataset = self.train_dataloader.dataset
         if len_epoch is None:
             # epoch-based training
             self.len_epoch = len(self.train_dataloader)
@@ -220,11 +221,16 @@ class Trainer(BaseTrainer):
 
     def _log_audio(self, batch):
         ind = self._get_random_log_ind(batch)
+
+        # log original audio
+        audio_path = Path(batch["audio_path"][ind])
+        original_audio = self.dataset.load_audio(audio_path)
+        self.writer.add_audio("audio_original", original_audio, sample_rate=self.config["preprocessing"]["sr"])
+
+        # log transformed audio
         audio = batch["audio"][ind].cpu()
         wave_augs = batch["wave_augs"][ind]
-        audio_path = Path(batch["audio_path"][ind])
-        t_info = torchaudio.info(audio_path)
-        self.writer.add_audio("audio" + (f"_({(' '.join(wave_augs))})" if wave_augs else ""), audio, sample_rate=t_info.sample_rate)
+        self.writer.add_audio("audio" + (f"_({(' '.join(wave_augs))})" if wave_augs else ""), audio, sample_rate=self.config["preprocessing"]["sr"])
 
     def _log_spectrogram(self, batch):
         ind = self._get_random_log_ind(batch)
