@@ -104,7 +104,10 @@ ENV/
 data/
 input/
 saved/
+saved_server/
 wandb/
+output/
+tmp/
 
 # editor, os cache directory
 .vscode/

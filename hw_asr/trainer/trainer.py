@@ -88,11 +88,15 @@ class Trainer(BaseTrainer):
         :return: A log that contains average loss and metric in this epoch.
         """
         self.model.train()
+        self.writer.set_step((epoch - 1) * self.len_epoch)
         self.writer.add_scalar("epoch", epoch)
         batch_ind_in_batch_accumulation = 0
         for batch_idx, batch in enumerate(
                 tqdm(self.train_dataloader, desc="train", total=self.len_epoch)
         ):
+            self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
+            # increment the batch index count
+            batch_ind_in_batch_accumulation += 1
             try:
                 batch = self.process_batch(
                     batch,
@@ -100,8 +104,6 @@ class Trainer(BaseTrainer):
                     metrics=self.train_metrics,
                     batch_ind_in_batch_accumulation=batch_ind_in_batch_accumulation
                 )
-                # increment the batch index count
-                batch_ind_in_batch_accumulation += 1
             except RuntimeError as e:
                 if "out of memory" in str(e) and self.skip_oom:
                     self.logger.warning("OOM on batch. Skipping batch.")
@@ -116,7 +118,6 @@ class Trainer(BaseTrainer):
                 self.train_metrics.update("grad norm", self.get_grad_norm())
                 batch_ind_in_batch_accumulation = 0
             if batch_idx % self.log_step == 0:
-                self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
                 self.logger.debug(
                     "Train Epoch: {} {} Loss: {:.6f}".format(
                         epoch, self._progress(batch_idx), batch["loss"].item()
@@ -145,7 +146,7 @@ class Trainer(BaseTrainer):
 
     def process_batch(self, batch, is_train: bool, metrics: MetricTracker, batch_ind_in_batch_accumulation: int | None = None):
         batch = self.move_batch_to_device(batch, self.device)
-        if is_train and batch_ind_in_batch_accumulation == 0:
+        if is_train and batch_ind_in_batch_accumulation == 1:
             self.optimizer.zero_grad()
         outputs = self.model(**batch)
         if type(outputs) is dict:
@@ -159,7 +160,7 @@ class Trainer(BaseTrainer):
         if is_train:
             # gradient accumulation: divide loss by number of batches
             (batch["loss"] / self.n_batches_accumulation).backward()
-            if batch_ind_in_batch_accumulation + 1 == self.n_batches_accumulation:
+            if batch_ind_in_batch_accumulation == self.n_batches_accumulation:
                 self._clip_grad_norm()
                 self.optimizer.step()
                 if self.lr_scheduler is not None:
