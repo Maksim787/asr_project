@@ -50,7 +50,7 @@
     "data": {
         "train": {
             "batch_size": 32,
-            "num_workers": 8,
+            "num_workers": 16,
             "datasets": [
                 {
                     "type": "LibrispeechDataset",
@@ -65,7 +65,7 @@
         },
         "val-clean": {
             "batch_size": 16,
-            "num_workers": 8,
+            "num_workers": 16,
             "datasets": [
                 {
                     "type": "LibrispeechDataset",
@@ -79,7 +79,7 @@
         },
         "val-other": {
             "batch_size": 16,
-            "num_workers": 8,
+            "num_workers": 16,
             "datasets": [
                 {
                     "type": "LibrispeechDataset",

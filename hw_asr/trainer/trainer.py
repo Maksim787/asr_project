@@ -97,6 +97,8 @@ class Trainer(BaseTrainer):
         ):
             self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
             # increment the batch index count
+            if not batch:
+                continue # Skip errors in dataloader
             batch_ind_in_batch_accumulation += 1
             try:
                 batch = self.process_batch(
@@ -161,7 +163,7 @@ class Trainer(BaseTrainer):
         if is_train:
             # gradient accumulation: divide loss by number of batches
             (batch["loss"] / self.n_batches_accumulation).backward()
-            if batch_ind_in_batch_accumulation == self.n_batches_accumulation:
+            if batch_ind_in_batch_accumulation >= self.n_batches_accumulation:
                 self._clip_grad_norm()
                 self.optimizer.step()
                 if self.lr_scheduler is not None:
@@ -190,6 +192,8 @@ class Trainer(BaseTrainer):
                     desc=part,
                     total=len(dataloader),
             ):
+                if not batch:
+                    continue # Skip errors in dataloader
                 batch = self.process_batch(
                     batch,
                     is_train=False,
