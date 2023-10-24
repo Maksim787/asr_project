@@ -135,6 +135,8 @@ class BaseTrainer:
 
             if epoch % self.save_period == 0 or best:
                 self._save_checkpoint(epoch, save_best=best, only_best=True)
+        # Save last checkpoint
+        self._save_checkpoint(epoch, save_best=False, only_best=False)
 
     def _save_checkpoint(self, epoch, save_best=False, only_best=False):
         """
@@ -179,7 +181,13 @@ class BaseTrainer:
                 "Warning: Architecture configuration given in config file is different from that "
                 "of checkpoint. This may yield an exception while state_dict is being loaded."
             )
+        
+        # load optimizer state (accumulated gradients)
         self.model.load_state_dict(checkpoint["state_dict"])
+        new_lr = self.optimizer.param_groups[0]['lr']
+        self.optimizer.load_state_dict(checkpoint["optimizer"])
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = new_lr
 
         self.logger.info(
             "Checkpoint loaded. Resume training from epoch {}".format(self.start_epoch)

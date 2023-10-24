@@ -148,7 +148,7 @@
         "save_period": 5,
         "verbosity": 2,
         "monitor": "min val-other_loss",
-        "early_stop": 10,
+        "early_stop": 60,
         "visualize": "wandb",
         "wandb_project": "asr_project",
         "wandb_run": "deep_speech_2_fine_tune (server)",
