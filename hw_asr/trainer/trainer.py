@@ -37,7 +37,7 @@ class Trainer(BaseTrainer):
             len_epoch=None,
             skip_oom=True,
     ):
-        super().__init__(model, criterion, metrics, optimizer, config, device)
+        super().__init__(model, criterion, metrics, optimizer, lr_scheduler, config, device)
         self.skip_oom = skip_oom
         self.text_encoder = text_encoder
         self.config = config
@@ -51,13 +51,14 @@ class Trainer(BaseTrainer):
             self.train_dataloader = inf_loop(self.train_dataloader)
             self.len_epoch = len_epoch
         self.evaluation_dataloaders = {k: v for k, v in dataloaders.items() if k != "train"}
-        self.lr_scheduler = lr_scheduler
         self.log_step = config["trainer"].get("log_step", 50)
         self.n_batches_accumulation = config["trainer"].get("n_batches_accumulation", 1)
         self.beam_size = config["trainer"].get("beam_size", 100)
 
         if "steps_per_epoch" in config["lr_scheduler"]["args"] and self.len_epoch is not None:
             assert self.n_batches_accumulation * config["lr_scheduler"]["args"]["steps_per_epoch"] == self.len_epoch
+        if "T_max" in config["lr_scheduler"]["args"] and self.len_epoch is not None:
+            assert self.len_epoch * (self.epochs + 1) == config["lr_scheduler"]["args"]["T_max"]
 
         self.train_metrics = MetricTracker(
             "loss", "grad norm", *[m.name for m in self.metrics if not m.only_val], writer=self.writer
@@ -98,7 +99,7 @@ class Trainer(BaseTrainer):
             self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
             # increment the batch index count
             if not batch:
-                continue # Skip errors in dataloader
+                continue  # Skip errors in dataloader
             batch_ind_in_batch_accumulation += 1
             try:
                 batch = self.process_batch(
@@ -193,7 +194,7 @@ class Trainer(BaseTrainer):
                     total=len(dataloader),
             ):
                 if not batch:
-                    continue # Skip errors in dataloader
+                    continue  # Skip errors in dataloader
                 batch = self.process_batch(
                     batch,
                     is_train=False,
