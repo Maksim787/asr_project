@@ -32,7 +32,7 @@ def main(config):
     text_encoder = config.get_text_encoder()
 
     # setup data_loader instances
-    dataloaders = get_dataloaders(config, text_encoder)
+    dataloaders, dataset = get_dataloaders(config, text_encoder)
 
     # build model architecture, then print to console
     model = config.init_obj(config["arch"], module_arch, n_class=len(text_encoder))
@@ -66,6 +66,7 @@ def main(config):
         config=config,
         device=device,
         dataloaders=dataloaders,
+        dataset=dataset,
         lr_scheduler=lr_scheduler,
         len_epoch=config["trainer"].get("len_epoch", None)
     )

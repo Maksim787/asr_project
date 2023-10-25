@@ -60,4 +60,4 @@ def get_dataloaders(configs: ConfigParser, text_encoder: BaseTextEncoder):
             batch_sampler=batch_sampler, drop_last=drop_last
         )
         dataloaders[split] = dataloader
-    return dataloaders
+    return dataloaders, datasets[0]

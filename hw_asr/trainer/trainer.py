@@ -32,6 +32,7 @@ class Trainer(BaseTrainer):
             config,
             device,
             dataloaders,
+            dataset,
             text_encoder,
             lr_scheduler=None,
             len_epoch=None,
@@ -42,7 +43,7 @@ class Trainer(BaseTrainer):
         self.text_encoder = text_encoder
         self.config = config
         self.train_dataloader = dataloaders["train"]
-        self.dataset = self.train_dataloader.dataset
+        self.dataset = dataset
         if len_epoch is None:
             # epoch-based training
             self.len_epoch = len(self.train_dataloader)
