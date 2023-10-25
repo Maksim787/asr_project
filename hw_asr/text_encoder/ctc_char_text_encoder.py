@@ -1,9 +1,26 @@
+import os
 from typing import List, NamedTuple
 from collections import defaultdict
+from pathlib import Path
 
 import torch
+import shutil
+import gzip
+import multiprocessing
+from pyctcdecode import build_ctcdecoder
+from speechbrain.utils.data_utils import download_file
 
 from .char_text_encoder import CharTextEncoder
+
+
+LM_MODELS_DIRECTORY = Path('lm_models/')
+LM_MODELS_DIRECTORY.mkdir(exist_ok=True)
+
+MODEL_URL = 'https://www.openslr.org/resources/11/3-gram.pruned.1e-7.arpa.gz'
+VOCAB_URL = 'http://www.openslr.org/resources/11/librispeech-vocab.txt'
+
+MODEL_PATH = LM_MODELS_DIRECTORY / '3-gram.pruned.1e-7.arpa'
+VOCAB_PATH = LM_MODELS_DIRECTORY / 'librispeech-vocab.txt'
 
 
 class Hypothesis(NamedTuple):
@@ -19,7 +36,7 @@ class CTCCharTextEncoder(CharTextEncoder):
         vocab = [self.EMPTY_TOK] + list(self.alphabet)
         self.ind2char = dict(enumerate(vocab))
         self.char2ind = {v: k for k, v in self.ind2char.items()}
-        self.is_lm_loaded = False
+        self.lm_model = None
 
     def _correct_sentence(self, text: str) -> str:
         # Remove double spaces
@@ -101,9 +118,37 @@ class CTCCharTextEncoder(CharTextEncoder):
         hypos = [Hypothesis(self._correct_sentence(prefix), prob) for prefix, prob in best_prefixes.items()]
         return sorted(hypos, key=lambda x: x.prob, reverse=True)
 
-    def _load_lm(self):
-        self.is_lm_loaded = True
+    def _download_lm(self):
+        if not MODEL_PATH.exists():
+            extract_path = LM_MODELS_DIRECTORY / '3-gram.pruned.1e-7.arpa.gz'
+            # Download file
+            download_file(MODEL_URL, extract_path)
+            # Extract file
+            with gzip.open(extract_path, 'rb') as f_in, open(MODEL_PATH, 'wb') as f_out:
+                shutil.copyfileobj(f_in, f_out)
+            os.remove(str(extract_path))
+            # Convert to lowercase
+            with open(MODEL_PATH) as f:
+                content = f.read()
+            with open(MODEL_PATH, 'w') as f:
+                f.write(content.lower())
+        download_file(VOCAB_URL, VOCAB_PATH)
 
-    def ctc_beam_search_lm(self):
-        if not self.is_lm_loaded:
-            self._load_lm()
+    def load_lm(self):
+        if self.lm_model is not None:
+            return
+        self._download_lm()
+        with open(VOCAB_PATH) as f:
+            unigram_list = [t.lower() for t in f.read().strip().split("\n")]
+        self.lm_model = build_ctcdecoder(
+            [''] + self.alphabet,
+            str(MODEL_PATH),
+            unigram_list,
+        )
+
+    def ctc_beam_search_lm(self, log_probs_batch: torch.Tensor, log_probs_lengths: torch.Tensor, beam_size: int, pool: multiprocessing.Pool) -> list[str]:
+        self.load_lm()
+        assert len(log_probs_batch) == len(log_probs_lengths)
+        log_probs_batch = [log_probs[:length].cpu().numpy() for log_probs, length in zip(log_probs_batch, log_probs_lengths)]
+        pred_lm = self.lm_model.decode_batch(pool, log_probs_batch, beam_width=beam_size)
+        return pred_lm

@@ -16,7 +16,6 @@ from hw_asr.utils.parse_config import ConfigParser
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
-# TODO: fix random seeds for reproducibility
 SEED = 124
 torch.manual_seed(SEED)
 torch.backends.cudnn.deterministic = True

@@ -17,3 +17,5 @@ pillow
 
 pyspellchecker
 textblob
+kenlm
+ipykernel

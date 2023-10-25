@@ -1,10 +1,9 @@
 import argparse
 import json
 import os
-import itertools
+import multiprocessing
 from pathlib import Path
-from collections import defaultdict
-from pprint import pprint
+
 
 import torch
 import numpy as np
@@ -28,6 +27,8 @@ def main(config, out_dir):
 
     # text_encoder
     text_encoder = config.get_text_encoder()
+    # load LM
+    text_encoder.load_lm()
 
     # setup data_loader instances
     dataloaders = get_dataloaders(config, text_encoder)
@@ -50,36 +51,41 @@ def main(config, out_dir):
     out_dir = Path(out_dir)
     out_dir.mkdir(exist_ok=True, parents=True)
 
-    BEAM_SIZE = 100
+    BEAM_SIZE_FOR_BEAM_SEARCH = 20
+    BEAM_SIZE_FOR_LM_BEAM_SEARCH = 2000
 
-    with torch.no_grad():
-        for part, dataloader in dataloaders.items():
-            out_file = out_dir / f"{part}_output.json"
-            results = []
-            for batch_num, batch in enumerate(tqdm(dataloader)):
-                batch = Trainer.move_batch_to_device(batch, device)
-                output = model(**batch)
-                if type(output) is dict:
-                    batch.update(output)
-                else:
-                    batch["logits"] = output
-                batch["log_probs"] = torch.log_softmax(batch["logits"], dim=-1)
-                batch["log_probs_length"] = model.transform_input_lengths(batch["spectrogram_length"])
-                batch["probs"] = batch["log_probs"].exp().cpu()
-                batch["argmax"] = batch["probs"].argmax(-1)
-                for i in range(len(batch["text"])):
-                    argmax = batch["argmax"][i]
-                    argmax = argmax[: int(batch["log_probs_length"][i])]
-                    pred_text_beam_search = text_encoder.ctc_beam_search(batch["log_probs"][i], batch["log_probs_length"][i], beam_size=BEAM_SIZE)[0].text
-                    results.append(
-                        {
-                            "ground_truth": batch["text"][i],
-                            "pred_text_argmax": text_encoder.ctc_decode_enhanced(argmax.cpu().numpy()),
-                            "pred_text_beam_search": pred_text_beam_search
-                        }
-                    )
-            with Path(out_file).open("w") as f:
-                json.dump(results, f, indent=2)
+    with multiprocessing.Pool(multiprocessing.cpu_count()) as pool:
+        with torch.no_grad():
+            for part, dataloader in dataloaders.items():
+                out_file = out_dir / f"{part}_output.json"
+                results = []
+                for batch_num, batch in enumerate(tqdm(dataloader)):
+                    batch = Trainer.move_batch_to_device(batch, device)
+                    output = model(**batch)
+                    if type(output) is dict:
+                        batch.update(output)
+                    else:
+                        batch["logits"] = output
+                    batch["log_probs"] = torch.log_softmax(batch["logits"], dim=-1)
+                    batch["log_probs_length"] = model.transform_input_lengths(batch["spectrogram_length"])
+                    batch["probs"] = batch["log_probs"].exp().cpu()
+                    batch["argmax"] = batch["probs"].argmax(-1)
+                    pred_text_beam_search_lm = text_encoder.ctc_beam_search_lm(batch["log_probs"], batch["log_probs_length"], pool=pool, beam_size=BEAM_SIZE_FOR_LM_BEAM_SEARCH)
+                    for i in range(len(batch["text"])):
+                        argmax = batch["argmax"][i]
+                        argmax = argmax[: int(batch["log_probs_length"][i])]
+                        pred_text_beam_search = text_encoder.ctc_beam_search(batch["log_probs"][i], batch["log_probs_length"][i], beam_size=BEAM_SIZE_FOR_BEAM_SEARCH)[0].text
+                        results.append(
+                            {
+                                "ground_truth": batch["text"][i],
+                                "pred_text_argmax": text_encoder.ctc_decode_enhanced(argmax.cpu().numpy()),
+                                f"pred_text_beam_search_{BEAM_SIZE_FOR_BEAM_SEARCH}": pred_text_beam_search,
+                                f"pred_text_beam_search_lm_{BEAM_SIZE_FOR_LM_BEAM_SEARCH}": pred_text_beam_search_lm[i]
+                            }
+                        )
+
+                with Path(out_file).open("w") as f:
+                    json.dump(results, f, indent=2)
 
 
 if __name__ == "__main__":
