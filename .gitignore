@@ -108,6 +108,7 @@ saved_server/
 wandb/
 output*
 tmp/
+lm_models/
 
 # editor, os cache directory
 .vscode/

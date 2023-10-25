@@ -19,13 +19,13 @@ class CTCCharTextEncoder(CharTextEncoder):
         vocab = [self.EMPTY_TOK] + list(self.alphabet)
         self.ind2char = dict(enumerate(vocab))
         self.char2ind = {v: k for k, v in self.ind2char.items()}
+        self.is_lm_loaded = False
 
     def _correct_sentence(self, text: str) -> str:
         # Remove double spaces
         text = text.strip()
         while '  ' in text:
             text = text.replace('  ', ' ')
-        # TODO: correct mistakes
         return text
 
     def ctc_decode_enhanced(self, inds: list[int]) -> str:
@@ -91,7 +91,7 @@ class CTCCharTextEncoder(CharTextEncoder):
         probs = torch.exp(log_probs)
 
         assert voc_size == len(self.ind2char)
-        # (prefix, last_token) -> log(prob)
+        # (prefix, last_token) -> prob
         state: dict[tuple[str, str], float] = {('', self.EMPTY_TOK): 1.0}
         best_prefixes: dict[str, float] = {'': 1.0}
         for probs_for_time_t in probs:
@@ -100,3 +100,10 @@ class CTCCharTextEncoder(CharTextEncoder):
             best_prefixes = self._get_best_prefixes(state, beam_size)
         hypos = [Hypothesis(self._correct_sentence(prefix), prob) for prefix, prob in best_prefixes.items()]
         return sorted(hypos, key=lambda x: x.prob, reverse=True)
+
+    def _load_lm(self):
+        self.is_lm_loaded = True
+
+    def ctc_beam_search_lm(self):
+        if not self.is_lm_loaded:
+            self._load_lm()
