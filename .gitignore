@@ -106,7 +106,7 @@ input/
 saved/
 saved_server/
 wandb/
-output/
+output*
 tmp/
 
 # editor, os cache directory

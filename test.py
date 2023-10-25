@@ -4,6 +4,7 @@ import os
 import itertools
 from pathlib import Path
 from collections import defaultdict
+from pprint import pprint
 
 import torch
 import numpy as np
@@ -14,7 +15,6 @@ from hw_asr.trainer import Trainer
 from hw_asr.utils import ROOT_PATH
 from hw_asr.utils.object_loading import get_dataloaders
 from hw_asr.utils.parse_config import ConfigParser
-from hw_asr.metric.utils import calc_cer, calc_wer
 
 
 DEFAULT_CHECKPOINT_PATH = ROOT_PATH / "default_test_model" / "checkpoint.pth"
@@ -55,10 +55,7 @@ def main(config, out_dir):
     with torch.no_grad():
         for part, dataloader in dataloaders.items():
             out_file = out_dir / f"{part}_output.json"
-            out_metrics_file = out_dir / f"{part}_metrics.json"
             results = []
-            wer = defaultdict(list)
-            cer = defaultdict(list)
             for batch_num, batch in enumerate(tqdm(dataloader)):
                 batch = Trainer.move_batch_to_device(batch, device)
                 output = model(**batch)
@@ -73,23 +70,16 @@ def main(config, out_dir):
                 for i in range(len(batch["text"])):
                     argmax = batch["argmax"][i]
                     argmax = argmax[: int(batch["log_probs_length"][i])]
+                    pred_text_beam_search = text_encoder.ctc_beam_search(batch["log_probs"][i], batch["log_probs_length"][i], beam_size=BEAM_SIZE)[0].text
                     results.append(
                         {
                             "ground_truth": batch["text"][i],
                             "pred_text_argmax": text_encoder.ctc_decode_enhanced(argmax.cpu().numpy()),
-                            "pred_text_beam_search": text_encoder.ctc_beam_search(
-                                batch["log_probs"][i], batch["log_probs_length"][i], beam_size=BEAM_SIZE
-                            )[0].text,
+                            "pred_text_beam_search": pred_text_beam_search
                         }
                     )
-                    for metric, metric_func, metric_name in [(wer, calc_wer, "WER"), (cer, calc_cer, "CER")]:
-                        metric[f"{metric_name}_argmax"].append(metric_func(results[-1]["ground_truth"], results[-1]["pred_text_argmax"]) * 100)
-                        metric[f"{metric_name}_beam_search_{BEAM_SIZE}"].append(metric_func(results[-1]["ground_truth"], results[-1]["pred_text_beam_search"]) * 100)
-            metrics = {name: np.mean(values) for name, values in itertools.chain(wer.items(), cer.items())}
             with Path(out_file).open("w") as f:
                 json.dump(results, f, indent=2)
-            with Path(out_metrics_file).open("w") as f:
-                json.dump(metrics, f, indent=2)
 
 
 if __name__ == "__main__":
