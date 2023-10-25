@@ -131,7 +131,7 @@ class CTCCharTextEncoder(CharTextEncoder):
             with open(MODEL_PATH) as f:
                 content = f.read()
             with open(MODEL_PATH, 'w') as f:
-                f.write(content.lower())
+                f.write(content.lower().replace('\'', '').replace('"', ''))
         download_file(VOCAB_URL, VOCAB_PATH)
 
     def load_lm(self):
@@ -139,11 +139,11 @@ class CTCCharTextEncoder(CharTextEncoder):
             return
         self._download_lm()
         with open(VOCAB_PATH) as f:
-            unigram_list = [t.lower() for t in f.read().strip().split("\n")]
+            unigram_list = [t.lower().strip().replace('\'', '').replace('"', '') for t in f.read().strip().split("\n")]
         self.lm_model = build_ctcdecoder(
             [''] + self.alphabet,
             str(MODEL_PATH),
-            unigram_list,
+            unigram_list
         )
 
     def ctc_beam_search_lm(self, log_probs_batch: torch.Tensor, log_probs_lengths: torch.Tensor, beam_size: int, pool: multiprocessing.Pool) -> list[str]:
