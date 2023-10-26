@@ -134,7 +134,7 @@
     "lr_scheduler": {
         "type": "CosineAnnealingLR",
         "args": {
-          "T_max": 17408
+          "T_max": 16896
         }
     },
     "trainer": {
