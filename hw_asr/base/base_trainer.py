@@ -186,8 +186,7 @@ class BaseTrainer:
         self.model.load_state_dict(checkpoint["state_dict"])
         new_lr = self.optimizer.param_groups[0]['lr']
         self.optimizer.load_state_dict(checkpoint["optimizer"])
-        for param_group in self.optimizer.param_groups:
-            param_group['lr'] = new_lr
+        self.optimizer.param_groups[0]['lr'] = new_lr
 
         self.logger.info(
             "Checkpoint loaded. Resume training from epoch {}".format(self.start_epoch)

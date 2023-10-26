@@ -90,7 +90,7 @@
     "optimizer": {
         "type": "Adam",
         "args": {
-            "lr": 0.0002
+            "lr": 0.00005
         }
     },
     "loss": {
@@ -132,13 +132,9 @@
         }
     ],
     "lr_scheduler": {
-        "type": "OneCycleLR",
+        "type": "CosineAnnealingLR",
         "args": {
-            "steps_per_epoch": 512,
-            "epochs": 33,
-            "anneal_strategy": "cos",
-            "max_lr": 0.0002,
-            "pct_start": 0.2
+          "T_max": 17408
         }
     },
     "trainer": {
