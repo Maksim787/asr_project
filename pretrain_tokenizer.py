@@ -15,7 +15,7 @@ def main(index_directory: str, target_directory: str, vocab_size: int):
 
     # Create target directory to store tokenizer model and vocabulary
     target_directory = Path(target_directory)
-    target_directory.mkdir(exist_ok=True)
+    target_directory.mkdir(exist_ok=True, parents=True)
 
     # Load datasets
     datasets = load_train_index(index_directory)

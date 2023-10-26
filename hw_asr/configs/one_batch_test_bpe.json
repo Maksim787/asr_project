@@ -1,5 +1,5 @@
 {
-  "name": "one_batch_test",
+  "name": "one_batch_test_bpe",
   "n_gpu": 1,
   "preprocessing": {
     "sr": 16000,
@@ -37,7 +37,7 @@
             "part": "dev-clean",
             "max_audio_length": 20.0,
             "max_text_length": 200,
-            "limit": 10
+            "limit": 80
           }
         }
       ]
@@ -52,7 +52,7 @@
             "part": "dev-clean",
             "max_audio_length": 20.0,
             "max_text_length": 200,
-            "limit": 10
+            "limit": 80
           }
         }
       ]
@@ -87,7 +87,7 @@
   "lr_scheduler": {
     "type": "OneCycleLR",
     "args": {
-      "steps_per_epoch": 20,
+      "steps_per_epoch": 5,
       "epochs": 51,
       "anneal_strategy": "cos",
       "max_lr": 1e-2,
@@ -103,9 +103,10 @@
     "early_stop": 100,
     "visualize": "wandb",
     "wandb_project": "asr_project",
-    "wandb_run": "baseline_one_batch_test",
+    "wandb_run": "baseline_one_batch_test_bpe",
     "len_epoch": 20,
     "log_step": 20,
-    "grad_norm_clip": 10
+    "grad_norm_clip": 10,
+    "n_batches_accumulation": 4
   }
 }

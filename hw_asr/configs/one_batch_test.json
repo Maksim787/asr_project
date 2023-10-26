@@ -81,7 +81,7 @@
   "lr_scheduler": {
     "type": "OneCycleLR",
     "args": {
-      "steps_per_epoch": 20,
+      "steps_per_epoch": 5,
       "epochs": 51,
       "anneal_strategy": "cos",
       "max_lr": 1e-2,
@@ -100,6 +100,7 @@
     "wandb_run": "baseline_one_batch_test",
     "len_epoch": 20,
     "log_step": 20,
-    "grad_norm_clip": 10
+    "grad_norm_clip": 10,
+    "n_batches_accumulation": 4
   }
 }
