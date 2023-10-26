@@ -1,5 +1,7 @@
 import argparse
 import requests
+import zipfile
+import os
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -20,9 +22,9 @@ def download_from_yandex_disk(url: str, dst: Path):
     download_file(response.json()['href'], dst)
 
 
-def main(download_directory: str, config_url: str, model_url: str):
+def main(download_directory: str, config_url: str, model_url: str, index_url: str):
     # Create model directory
-    
+
     download_directory = Path(download_directory)
     download_directory.mkdir(exist_ok=True, parents=True)
 
@@ -32,6 +34,26 @@ def main(download_directory: str, config_url: str, model_url: str):
 
     model_path = download_directory / 'model_checkpoint.pth'
     download_from_yandex_disk(model_url, model_path)
+
+    # Download index
+    index_directory = download_directory / 'index/'
+    index_directory.mkdir(exist_ok=True, parents=True)
+    existing_files = list(index_directory.iterdir())
+    if len(list(filter(
+            lambda x: x.name.endswith('_index.json') and ('train' in x.name or 'dev' in x.name),
+            existing_files)
+    )) == 5:
+        print('Index already exists: Skipping download')
+    else:
+        # Download folder in .zip format
+        index_zip_path = index_directory / 'index.zip'
+        download_from_yandex_disk(index_url, index_zip_path)
+
+        # Extract index
+        with zipfile.ZipFile(index_zip_path, 'r') as zip_ref:
+            zip_ref.extractall(index_directory.parent)
+        # Remove zip file
+        os.remove(index_zip_path)
 
     print('Success!')
 
@@ -63,5 +85,13 @@ if __name__ == '__main__':
         help="Directory to save the model and config"
     )
 
+    args.add_argument(
+        "-i",
+        "--index_url",
+        default="https://disk.yandex.ru/d/DpMq8DMatAxmlg",
+        type=str,
+        help="Directory to save the model and config"
+    )
+
     args = args.parse_args()
-    main(args.download_directory, args.config_url, args.model_url)
+    main(args.download_directory, args.config_url, args.model_url, args.index_url)

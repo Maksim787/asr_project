@@ -184,9 +184,6 @@ class BaseTrainer:
         
         # load optimizer state (accumulated gradients)
         self.model.load_state_dict(checkpoint["state_dict"])
-        new_lr = self.optimizer.param_groups[0]['lr']
-        self.optimizer.load_state_dict(checkpoint["optimizer"])
-        self.optimizer.param_groups[0]['lr'] = new_lr
 
         self.logger.info(
             "Checkpoint loaded. Resume training from epoch {}".format(self.start_epoch)

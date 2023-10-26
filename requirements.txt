@@ -19,4 +19,5 @@ requests
 pyspellchecker
 textblob
 kenlm
+sentencepiece
 ipykernel

@@ -175,4 +175,4 @@ class CTCCharTextEncoder(CharTextEncoder):
         # Perform parallel beam search
         pred_lm = self.lm_model.decode_batch(pool, log_probs_batch, beam_width=beam_size)
         # Correct sentence (remove double spaces)
-        return self._correct_sentence(pred_lm)
+        return [self._correct_sentence(sentence) for sentence in pred_lm]

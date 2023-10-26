@@ -32,7 +32,7 @@ def main(config, out_dir: str, beam_size_ordinary: int, beam_size_lm: int):
     text_encoder.load_lm()
 
     # setup data_loader instances
-    dataloaders = get_dataloaders(config, text_encoder)
+    dataloaders, _ = get_dataloaders(config, text_encoder)
 
     # build model architecture
     model = config.init_obj(config["arch"], module_model, n_class=len(text_encoder))
@@ -151,7 +151,6 @@ if __name__ == "__main__":
         help="Limit the test set"
     )
     args.add_argument(
-        "-l",
         "--beam_size_lm",
         default=5000,
         type=int,

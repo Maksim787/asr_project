@@ -11,6 +11,7 @@ from textblob import TextBlob
 
 from hw_asr.base.base_text_encoder import BaseTextEncoder
 from hw_asr.metric.utils import calc_cer, calc_wer
+from common import load_train_index
 
 
 def get_words_from_index(ind: list[dict]) -> Counter:
@@ -143,16 +144,8 @@ def main(predictions_directory: str, spell_check: bool, index_directory: str):
         index_directory = Path(index_directory)
         assert index_directory.exists()
 
-        # Load observations from train datasets
-        datasets = []
-        for path in index_directory.iterdir():
-            if not path.name.endswith('_index.json'):
-                continue  # Skip non-index files
-            # Take only train and validation index 
-            if 'train' in path.name or 'dev' in path.name:
-                with open(path, 'r') as f:
-                    datasets.append(json.load(f))
-        assert len(datasets) == 5
+        # Load index
+        datasets = load_train_index(index_directory)
 
         # Construct dictionary
         spell = build_dictionary(datasets)
@@ -192,7 +185,7 @@ if __name__ == '__main__':
     args.add_argument(
         '-i',
         '--index_directory',
-        default='saved_server/index/',
+        default='pretrained_model/index/',
         type=str,
         help='Folder with ',
     )
