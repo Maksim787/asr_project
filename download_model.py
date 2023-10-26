@@ -72,7 +72,7 @@ if __name__ == '__main__':
     args.add_argument(
         "-c",
         "--config_url",
-        default="https://disk.yandex.ru/d/Q8XHuMKsEc1oLg",
+        default="https://disk.yandex.ru/d/FJd4nuh59orwbw",
         type=str,
         help="Directory to save the model and config"
     )
@@ -80,7 +80,7 @@ if __name__ == '__main__':
     args.add_argument(
         "-m",
         "--model_url",
-        default="https://disk.yandex.ru/d/V1IMqYW1P7NWKA",
+        default="https://disk.yandex.ru/d/GRkXW-zKSt5k7g",
         type=str,
         help="Directory to save the model and config"
     )

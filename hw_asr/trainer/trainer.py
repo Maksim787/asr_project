@@ -120,8 +120,9 @@ class Trainer(BaseTrainer):
                 else:
                     raise e
             if batch_ind_in_batch_accumulation == self.n_batches_accumulation:
-                self.train_metrics.update("grad norm", self.get_grad_norm())
                 batch_ind_in_batch_accumulation = 0
+            if batch_ind_in_batch_accumulation == self.n_batches_accumulation or batch_idx % self.log_step == 0:
+                self.train_metrics.update("grad norm", self.get_grad_norm())
             if batch_idx % self.log_step == 0:
                 self.logger.debug(
                     "Train Epoch: {} {} Loss: {:.6f}".format(
