@@ -187,7 +187,7 @@ if __name__ == '__main__':
         '--index_directory',
         default='pretrained_model/index/',
         type=str,
-        help='Folder with ',
+        help='Directory with index calculated from the train dataset',
     )
 
     args = args.parse_args()

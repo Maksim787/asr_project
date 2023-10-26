@@ -46,7 +46,7 @@ class TestDataloader(unittest.TestCase):
         _TOTAL_ITERATIONS = 10
         config_parser = ConfigParser.get_test_configs()
         with clear_log_folder_after_use(config_parser):
-            dataloaders = get_dataloaders(config_parser, config_parser.get_text_encoder())
+            dataloaders, _ = get_dataloaders(config_parser, config_parser.get_text_encoder())
             for part in ["train", "val"]:
                 dl = dataloaders[part]
                 for i, batch in tqdm(enumerate(iter(dl)), total=_TOTAL_ITERATIONS,

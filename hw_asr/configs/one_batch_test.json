@@ -5,8 +5,7 @@
     "sr": 16000,
     "spectrogram": {
       "type": "MelSpectrogram",
-      "args": {
-      }
+      "args": {}
     },
     "log_spec": true
   },
@@ -65,23 +64,25 @@
   },
   "metrics": [
     {
-      "type": "ArgmaxWERMetric",
+      "type": "WERMetric",
       "args": {
-        "name": "WER (argmax)"
+        "name": "WER (argmax)",
+        "inference_type": "ctc_decode_enhanced"
       }
     },
     {
-      "type": "ArgmaxCERMetric",
+      "type": "CERMetric",
       "args": {
-        "name": "CER (argmax)"
+        "name": "CER (argmax)",
+        "inference_type": "ctc_decode_enhanced"
       }
     }
   ],
   "lr_scheduler": {
     "type": "OneCycleLR",
     "args": {
-      "steps_per_epoch": 100,
-      "epochs": 50,
+      "steps_per_epoch": 20,
+      "epochs": 51,
       "anneal_strategy": "cos",
       "max_lr": 1e-2,
       "pct_start": 0.2
@@ -96,7 +97,9 @@
     "early_stop": 100,
     "visualize": "wandb",
     "wandb_project": "asr_project",
-    "len_epoch": 100,
+    "wandb_run": "baseline_one_batch_test",
+    "len_epoch": 20,
+    "log_step": 20,
     "grad_norm_clip": 10
   }
 }
