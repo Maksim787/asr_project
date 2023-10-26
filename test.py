@@ -152,7 +152,7 @@ if __name__ == "__main__":
     )
     args.add_argument(
         "--beam_size_lm",
-        default=10000,
+        default=5000,
         type=int,
         help="Limit the test set"
     )

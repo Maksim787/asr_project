@@ -257,7 +257,6 @@ class Trainer(BaseTrainer):
             *args,
             **kwargs,
     ):
-        # TODO: implement logging of language model results
         if self.writer is None:
             return
         argmax_inds = log_probs.cpu().argmax(-1).numpy()

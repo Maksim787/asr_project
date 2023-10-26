@@ -8,7 +8,7 @@ from hw_asr.base import BaseModel
 
 class BatchNormReluRNN(nn.Module):
     """
-    A class to combine Pipeline: [BatchNorm, ReLU, RNN]
+    A class to combine the Pipeline: [BatchNorm, ReLU, RNN]
     """
     rnn_name_to_class = {
         'lstm': nn.LSTM,
@@ -55,6 +55,11 @@ class BatchNormReluRNN(nn.Module):
 
 
 class MaskCNN(nn.Module):
+    """
+    The module to compute convolutions using masks (so that inference is consistent among different batch size)
+    Example: padded values after first convolution become non-zero, so the second convolution will be biased
+    """
+
     def __init__(self, convolution_modules: nn.Sequential, debug: bool) -> None:
         super().__init__()
         self.convolution_modules = convolution_modules
@@ -82,13 +87,15 @@ class MaskCNN(nn.Module):
             # Find the length of sequence after Convolution
             seq_lengths = self._get_sequence_lengths(module, seq_lengths, dim=1)
 
-            # TODO: fix
+            # Iterate over samples from batch
             for idx, length in enumerate(seq_lengths):
                 length = length.item()
 
+                # Mask the padded values
                 if (mask[idx].size(2) - length) > 0:
                     mask[idx].narrow(dim=2, start=length, length=mask[idx].size(2) - length).fill_(1)
 
+            # Apply mask to output
             output = output.masked_fill(mask, 0)
             inputs = output
         if self.debug:
@@ -97,17 +104,26 @@ class MaskCNN(nn.Module):
         return output, seq_lengths
 
     def get_output_size(self, input_size: int):
+        """
+        Compute the output size along known dimension (along the frequency dimension of the spectrogram)
+        """
         size = torch.Tensor([input_size]).int()
         for module in self.convolution_modules:
             size = self._get_sequence_lengths(module, size, dim=0)
         return size.item()
 
     def transform_input_lengths(self, input_size: torch.Tensor):
+        """
+        Transform spectrogram length to sequence length
+        """
         for module in self.convolution_modules:
             input_size = self._get_sequence_lengths(module, input_size, dim=1)
         return input_size
 
     def _get_sequence_lengths(self, convolution: nn.Module, input_size: torch.Tensor, dim: int) -> torch.Tensor:
+        """
+        Get the size of convolution output given input_size input
+        """
         # Output size = [(input_size + 2 * padding_size - (dilation_size * (kernel_size - 1))) / stride_size] + 1
         if isinstance(convolution, nn.Conv2d):
             # Take time size (index=1) because this dimension is different for each element in batch

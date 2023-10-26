@@ -1,37 +1,48 @@
-# ASR project barebones
+# Installation guide
 
-## Installation guide
-
-1. Install requirements:
+## Install requirements:
 
 ```shell
 pip install -r requirements.txt
 ```
 
-2. Download model and dataset index:
+## Download model and dataset index:
 
 ```shell
 python download_model.py
 ```
 
-This script will download checkpoint and model's config in `pretrained_model/` directory (can by modified by `--download_directory` argument). This script also will download dataset index in `pretrained_model/index/` directory.
+This script will download checkpoint and model's config. This script also will download dataset index.
 
-3. Pretrain tokenizes:
+**Arguments:**
+1. `--download_directory` (default: `pretrained_model/`) - model and config save directory. Script will also create `index` directory with index inside it.
+1. `config_url`, `model_url`, `index_url` (default: correct links) - Yandex Disk links to download the corresponding files
+
+If you encounter any problems with Yandex Disk API download it manually using default URL arguments from the script.
+
+## Pretrain tokenizer:
 
 ```shell
 python pretrain_tokenizer.py
 ```
+This script train tokenizer from index and save the model.
 
-This script pretrain tokenizer from index in `pretrained_model/index/` and put the model inside `pretrained_model/tokenizer` (both directories could be modified by corresponding arguments).
+**Arguments*:*
+1. `vocab_size` (default: 100) - vocabulary size for BPE tokenizer
+1. `index_directory` (default: `pretrained_model/index`) - directory with dataset index (only train and validation index will be used)
+1. `target_directory` (default: `pretrained_model/tokenizer`) - path to save vocabulary and model.
 
-4. Generate predictions with model:
+# Inference guide
 
+## Create predictions with model:
 
 ```shell
 python test.py -r pretrained_model/model_checkpoint.pth -o output_final
 ```
 
-5. Evaluate predictions:
+TODO: arguments
+
+## Evaluate predictions:
 
 ```shell
 python evaluate.py -p output_final
@@ -40,8 +51,17 @@ Add optional spell checks using argument `--spell_check true`. In this case spec
 
 Metrics will be displayed in the terminal.
 
-6. To train you own model use:
+TODO: arguments
+
+
+# Train guide
+
+1. To train your own model use:
 
 ```shell
 python train.py -c pretrained_model/config.json
 ```
+
+TODO: arguments
+
+**Author:** Maksim Kazadaev
