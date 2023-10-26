@@ -110,15 +110,23 @@ class CTCCharTextEncoder(CharTextEncoder):
         assert voc_size == len(self.ind2char)
         # (prefix, last_token) -> prob
         state: dict[tuple[str, str], float] = {('', self.EMPTY_TOK): 1.0}
+        # prefix -> prob
         best_prefixes: dict[str, float] = {'': 1.0}
         for probs_for_time_t in probs:
+            # Remove unlikely prefixes
             state = self._truncate_state_to_best_prefixes(state, best_prefixes)
+            # Do 1 dynamical programming step
             state = self._extend_and_merge(probs_for_time_t, state)
+            # Calculate the prefixes with highest probabilities
             best_prefixes = self._get_best_prefixes(state, beam_size)
+        # Return hypothesis with their probabilities
         hypos = [Hypothesis(self._correct_sentence(prefix), prob) for prefix, prob in best_prefixes.items()]
         return sorted(hypos, key=lambda x: x.prob, reverse=True)
 
     def _download_lm(self):
+        """
+        Download model if not downloaded before
+        """
         if not MODEL_PATH.exists():
             extract_path = LM_MODELS_DIRECTORY / '3-gram.pruned.1e-7.arpa.gz'
             # Download file
@@ -130,25 +138,41 @@ class CTCCharTextEncoder(CharTextEncoder):
             # Convert to lowercase
             with open(MODEL_PATH) as f:
                 content = f.read()
+            # Remove ' and " characters
             with open(MODEL_PATH, 'w') as f:
                 f.write(content.lower().replace('\'', '').replace('"', ''))
         download_file(VOCAB_URL, VOCAB_PATH)
 
     def load_lm(self):
+        """
+        Load language model if not loaded before
+        """
         if self.lm_model is not None:
             return
+        # Download it if not downloaded before
         self._download_lm()
+        # Read the vocabulary
         with open(VOCAB_PATH) as f:
+            # Remove any ' and " signs from words
             unigram_list = [t.lower().strip().replace('\'', '').replace('"', '') for t in f.read().strip().split("\n")]
+        # Construct language model
         self.lm_model = build_ctcdecoder(
-            [''] + self.alphabet,
+            [''] + self.alphabet,  # Add <unk>
             str(MODEL_PATH),
             unigram_list
         )
 
     def ctc_beam_search_lm(self, log_probs_batch: torch.Tensor, log_probs_lengths: torch.Tensor, beam_size: int, pool: multiprocessing.Pool) -> list[str]:
+        """
+        Beam search with language model
+        It is performed in parallel by batches using pool
+        """
+        # Load language model if not loaded before
         self.load_lm()
         assert len(log_probs_batch) == len(log_probs_lengths)
+        # Truncate and convert to numpy arrays
         log_probs_batch = [log_probs[:length].cpu().numpy() for log_probs, length in zip(log_probs_batch, log_probs_lengths)]
+        # Perform parallel beam search
         pred_lm = self.lm_model.decode_batch(pool, log_probs_batch, beam_width=beam_size)
-        return pred_lm
+        # Correct sentence (remove double spaces)
+        return self._correct_sentence(pred_lm)

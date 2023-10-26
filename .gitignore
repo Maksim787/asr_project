@@ -109,6 +109,7 @@ wandb/
 output*
 tmp/
 lm_models/
+pretrained_model/
 
 # editor, os cache directory
 .vscode/

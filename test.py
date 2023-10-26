@@ -19,7 +19,8 @@ from hw_asr.utils.parse_config import ConfigParser
 DEFAULT_CHECKPOINT_PATH = ROOT_PATH / "default_test_model" / "checkpoint.pth"
 
 
-def main(config, out_dir):
+def main(config, out_dir: str, beam_size_ordinary: int, beam_size_lm: int):
+    print(f'Beam search parameters: {beam_size_ordinary = }; {beam_size_lm = }')
     logger = config.get_logger("test")
 
     # define cpu or gpu if possible
@@ -51,9 +52,6 @@ def main(config, out_dir):
     out_dir = Path(out_dir)
     out_dir.mkdir(exist_ok=True, parents=True)
 
-    BEAM_SIZE_FOR_BEAM_SEARCH = 20
-    BEAM_SIZE_FOR_LM_BEAM_SEARCH = 2000
-
     with multiprocessing.Pool(multiprocessing.cpu_count()) as pool:
         with torch.no_grad():
             for part, dataloader in dataloaders.items():
@@ -70,17 +68,17 @@ def main(config, out_dir):
                     batch["log_probs_length"] = model.transform_input_lengths(batch["spectrogram_length"])
                     batch["probs"] = batch["log_probs"].exp().cpu()
                     batch["argmax"] = batch["probs"].argmax(-1)
-                    pred_text_beam_search_lm = text_encoder.ctc_beam_search_lm(batch["log_probs"], batch["log_probs_length"], pool=pool, beam_size=BEAM_SIZE_FOR_LM_BEAM_SEARCH)
+                    pred_text_beam_search_lm = text_encoder.ctc_beam_search_lm(batch["log_probs"], batch["log_probs_length"], pool=pool, beam_size=beam_size_lm)
                     for i in range(len(batch["text"])):
                         argmax = batch["argmax"][i]
                         argmax = argmax[: int(batch["log_probs_length"][i])]
-                        pred_text_beam_search = text_encoder.ctc_beam_search(batch["log_probs"][i], batch["log_probs_length"][i], beam_size=BEAM_SIZE_FOR_BEAM_SEARCH)[0].text
+                        pred_text_beam_search = text_encoder.ctc_beam_search(batch["log_probs"][i], batch["log_probs_length"][i], beam_size=beam_size_ordinary)[0].text
                         results.append(
                             {
                                 "ground_truth": batch["text"][i],
                                 "pred_text_argmax": text_encoder.ctc_decode_enhanced(argmax.cpu().numpy()),
-                                f"pred_text_beam_search_{BEAM_SIZE_FOR_BEAM_SEARCH}": pred_text_beam_search,
-                                f"pred_text_beam_search_lm_{BEAM_SIZE_FOR_LM_BEAM_SEARCH}": pred_text_beam_search_lm[i]
+                                f"pred_text_beam_search_{beam_size_ordinary}": pred_text_beam_search,
+                                f"pred_text_beam_search_lm_{beam_size_lm}": pred_text_beam_search_lm[i]
                             }
                         )
 
@@ -143,6 +141,19 @@ if __name__ == "__main__":
         "-l",
         "--limit",
         default=None,
+        type=int,
+        help="Limit the test set"
+    )
+    args.add_argument(
+        "--beam_size_ordinary",
+        default=20,
+        type=int,
+        help="Limit the test set"
+    )
+    args.add_argument(
+        "-l",
+        "--beam_size_lm",
+        default=5000,
         type=int,
         help="Limit the test set"
     )
@@ -218,4 +229,4 @@ if __name__ == "__main__":
             }
         }
 
-    main(config, args.output_dir)
+    main(config, args.output_dir, args.beam_size_ordinary, args.beam_size_lm)
